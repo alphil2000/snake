@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Snake</title>
 <style>
-  :root { --bg:#111; --board:#1b1b1b; --grid:#222; --snake:#4ade80; --head:#22c55e; --food:#f87171; --text:#eee; }
+  :root { --bg:#111; --board:#1b1b1b; --grid:#222; --snake:#60a5fa; --head:#2563eb; --food:#f87171; --text:#eee; }
   * { box-sizing: border-box; }
   body { margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
          background:var(--bg); color:var(--text); font-family:system-ui, sans-serif; user-select:none; }
@@ -140,7 +140,7 @@ function draw() {
     ctx.fill();
   }
   snake.forEach((s, i) => {
-    ctx.fillStyle = i === 0 ? '#22c55e' : '#4ade80';
+    ctx.fillStyle = i === 0 ? '#2563eb' : '#60a5fa';
     ctx.fillRect(s.x*SIZE + 1, s.y*SIZE + 1, SIZE - 2, SIZE - 2);
   });
   // eyes
