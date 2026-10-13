@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake</title>
+<style>
+  :root { --bg:#111; --board:#1b1b1b; --grid:#222; --snake:#4ade80; --head:#22c55e; --food:#f87171; --text:#eee; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--text); font-family:system-ui, sans-serif; user-select:none; }
+  h1 { margin:0 0 8px; font-size:28px; letter-spacing:2px; }
+  #hud { display:flex; gap:24px; margin-bottom:10px; font-size:16px; }
+  #wrap { position:relative; }
+  canvas { display:block; background:var(--board); border-radius:8px; max-width:calc(100vw - 32px); height:auto; touch-action:none; }
+  #overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+             background:rgba(0,0,0,.6); border-radius:8px; text-align:center; gap:8px; }
+  #overlay.hidden { display:none; }
+  #overlay h2 { margin:0; font-size:26px; }
+  #overlay p { margin:0; opacity:.85; }
+  .help { margin-top:10px; font-size:13px; opacity:.6; }
+</style>
+</head>
+<body>
+  <h1>SNAKE</h1>
+  <div id="hud"><span>Score: <b id="score">0</b></span><span>Best: <b id="best">0</b></span></div>
+  <div id="wrap">
+    <canvas id="game" width="400" height="400"></canvas>
+    <div id="overlay"><h2 id="title">Snake</h2><p id="msg">Press Space / Enter or tap to start</p></div>
+  </div>
+  <div class="help">Arrows / WASD to move · Space to pause · Swipe on mobile</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const CELLS = 20, SIZE = canvas.width / CELLS;
+const scoreEl = document.getElementById('score'), bestEl = document.getElementById('best');
+const overlay = document.getElementById('overlay'), titleEl = document.getElementById('title'), msgEl = document.getElementById('msg');
+
+let best = 0;
+try { best = +localStorage.getItem('snake-best') || 0; } catch (e) {}
+bestEl.textContent = best;
+
+let snake, dir, queue, food, score, speed, state = 'idle', timer = null;
+
+function reset() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0};
+  queue = [];
+  score = 0; speed = 120;
+  scoreEl.textContent = 0;
+  placeFood();
+}
+
+function placeFood() {
+  const free = [];
+  for (let x = 0; x < CELLS; x++) for (let y = 0; y < CELLS; y++)
+    if (!snake.some(s => s.x === x && s.y === y)) free.push({x, y});
+  food = free.length ? free[Math.floor(Math.random() * free.length)] : null;
+}
+
+function start() {
+  if (state === 'over' || state === 'idle') reset();
+  state = 'running';
+  overlay.classList.add('hidden');
+  loop();
+}
+
+function loop() {
+  clearTimeout(timer);
+  if (state !== 'running') return;
+  step();
+  draw();
+  if (state === 'running') timer = setTimeout(loop, speed);
+}
+
+function step() {
+  if (queue.length) dir = queue.shift();
+  const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+  const eating = food && head.x === food.x && head.y === food.y;
+  const body = eating ? snake : snake.slice(0, -1); // tail moves away unless growing
+  if (head.x < 0 || head.y < 0 || head.x >= CELLS || head.y >= CELLS ||
+      body.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+  snake.unshift(head);
+  if (eating) {
+    score++;
+    scoreEl.textContent = score;
+    speed = Math.max(55, 120 - score * 3);
+    placeFood();
+    if (!food) return gameOver(true);
+  } else {
+    snake.pop();
+  }
+}
+
+function gameOver(won) {
+  state = 'over';
+  if (score > best) {
+    best = score; bestEl.textContent = best;
+    try { localStorage.setItem('snake-best', best); } catch (e) {}
+  }
+  titleEl.textContent = won ? 'You win!' : 'Game over';
+  msgEl.textContent = `Score: ${score} — press Space / Enter or tap to play again`;
+  overlay.classList.remove('hidden');
+}
+
+function togglePause() {
+  if (state === 'running') {
+    state = 'paused';
+    clearTimeout(timer);
+    titleEl.textContent = 'Paused';
+    msgEl.textContent = 'Press Space or tap to resume';
+    overlay.classList.remove('hidden');
+  } else if (state === 'paused') {
+    state = 'running';
+    overlay.classList.add('hidden');
+    loop();
+  }
+}
+
+function turn(nx, ny) {
+  if (state !== 'running') return;
+  const last = queue.length ? queue[queue.length - 1] : dir;
+  if ((nx === -last.x && ny === -last.y) || (nx === last.x && ny === last.y)) return;
+  if (queue.length < 3) queue.push({x:nx, y:ny});
+}
+
+function draw() {
+  ctx.fillStyle = '#1b1b1b';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#222';
+  for (let i = 1; i < CELLS; i++) {
+    ctx.beginPath(); ctx.moveTo(i*SIZE, 0); ctx.lineTo(i*SIZE, canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i*SIZE); ctx.lineTo(canvas.width, i*SIZE); ctx.stroke();
+  }
+  if (food) {
+    ctx.fillStyle = '#f87171';
+    ctx.beginPath();
+    ctx.arc(food.x*SIZE + SIZE/2, food.y*SIZE + SIZE/2, SIZE/2 - 3, 0, Math.PI*2);
+    ctx.fill();
+  }
+  snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#22c55e' : '#4ade80';
+    ctx.fillRect(s.x*SIZE + 1, s.y*SIZE + 1, SIZE - 2, SIZE - 2);
+  });
+  // eyes
+  const h = snake[0], cx = h.x*SIZE + SIZE/2, cy = h.y*SIZE + SIZE/2;
+  ctx.fillStyle = '#111';
+  [-1, 1].forEach(k => {
+    const ex = cx + dir.x*4 + dir.y*4*k, ey = cy + dir.y*4 + dir.x*4*k;
+    ctx.beginPath(); ctx.arc(ex, ey, 2, 0, Math.PI*2); ctx.fill();
+  });
+}
+
+const KEYS = {
+  ArrowUp:[0,-1], w:[0,-1], W:[0,-1],
+  ArrowDown:[0,1], s:[0,1], S:[0,1],
+  ArrowLeft:[-1,0], a:[-1,0], A:[-1,0],
+  ArrowRight:[1,0], d:[1,0], D:[1,0],
+};
+document.addEventListener('keydown', e => {
+  if (KEYS[e.key]) { e.preventDefault(); turn(...KEYS[e.key]); return; }
+  if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault();
+    if (state === 'running' || state === 'paused') togglePause(); else start();
+  }
+});
+
+let touchStart = null;
+canvas.parentElement.addEventListener('touchstart', e => {
+  const t = e.touches[0]; touchStart = {x:t.clientX, y:t.clientY};
+}, {passive:true});
+canvas.parentElement.addEventListener('touchend', e => {
+  if (!touchStart) return;
+  const t = e.changedTouches[0], dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
+  touchStart = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) {
+    if (state === 'running' || state === 'paused') togglePause(); else start();
+    return;
+  }
+  if (Math.abs(dx) > Math.abs(dy)) turn(Math.sign(dx), 0); else turn(0, Math.sign(dy));
+});
+overlay.addEventListener('click', () => { if (state === 'paused') togglePause(); else if (state !== 'running') start(); });
+
+reset();
+draw();
+</script>
+</body>
+</html>
